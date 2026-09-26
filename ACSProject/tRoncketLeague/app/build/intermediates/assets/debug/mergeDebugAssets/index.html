@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Rocket League - 2v2 Dummy Clone</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: sans-serif;
+            touch-action: none;
+        }
+        #minimap {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 150px;
+            height: 150px;
+            background: rgba(0, 10, 30, 0.8);
+            border: 2px solid #0ff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+            z-index: 10;
+            pointer-events: none;
+        }
+        #scoreboard {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: rgba(0, 10, 30, 0.85);
+            border: 2px solid #0ff;
+            padding: 8px 24px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.5);
+            z-index: 10;
+            color: #fff;
+            font-weight: bold;
+            font-size: 22px;
+        }
+        .score-team {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .blue-score { color: #00ffff; }
+        .orange-score { color: #ff5500; }
+        
+        #gameover {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 260px;
+            box-sizing: border-box;
+            color: #fff;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            display: none;
+            z-index: 20;
+            text-shadow: 0 0 10px #f00;
+            background: rgba(0, 10, 30, 0.95);
+            padding: 25px 15px;
+            border: 2px solid #0ff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 10px;
+        }
+        #gameover-text {
+            font-size: 22px;
+            margin-bottom: 15px;
+        }
+        #gameover button {
+            padding: 10px 18px;
+            font-size: 15px;
+            background: #0ff;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 0 10px #0ff;
+            border-radius: 5px;
+            width: 100%;
+        }
+        .controls-container {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 30px;
+            box-sizing: border-box;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .control-group {
+            display: flex;
+            gap: 15px;
+            pointer-events: auto;
+            align-items: center;
+        }
+        .btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(0, 255, 255, 0.2);
+            border: 2px solid #0ff;
+            border-radius: 50%;
+            color: #0ff;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            box-shadow: 0 0 10px rgba(0,255,255,0.5);
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        .btn:active {
+            background: rgba(0, 255, 255, 0.6);
+        }
+        #btn-gas { border-color: #0f0; color: #0f0; background: rgba(0, 255, 0, 0.2); }
+        #btn-break { border-color: #f00; color: #f00; background: rgba(255, 0, 0, 0.2); }
+        #btn-jump { border-color: #ff0; color: #ff0; background: rgba(255, 255, 0, 0.2); overflow: hidden; }
+        
+        /* NOS states */
+        #btn-nos { border-color: #f0f; color: #f0f; background: rgba(255, 0, 255, 0.2); overflow: hidden; }
+        #btn-nos.active { border-color: #ff5500; color: #ff5500; background: rgba(255, 85, 0, 0.6); box-shadow: 0 0 20px #ff5500; }
+        #btn-nos.cooldown { border-color: #555555; color: #555555; background: rgba(50, 50, 50, 0.4); box-shadow: none; }
+
+        .overlay-badge {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        #jump-overlay { color: #ff0; }
+        #nos-overlay { color: #aaa; }
+    </style>
+</head>
+<body>
+    <div id="scoreboard">
+        <div class="score-team blue-score">BLUE <span id="blue-pts">0</span></div>
+        <div>-</div>
+        <div class="score-team orange-score"><span id="orange-pts">0</span> ORANGE</div>
+    </div>
+
+    <canvas id="minimap" width="150" height="150"></canvas>
+
+    <div id="gameover">
+        <div id="gameover-text">BLUE WINS!</div>
+        <button onclick="restartGame()">NEW GAME</button>
+    </div>
+
+    <div class="controls-container">
+        <div class="control-group">
+            <div class="btn" id="btn-left">&#8592;</div>
+            <div class="btn" id="btn-right">&#8594;</div>
+        </div>
+        <div class="control-group">
+            <div class="btn" id="btn-break">B</div>
+            <div class="btn" id="btn-nos">NOS<div id="nos-overlay" class="overlay-badge">7s</div></div>
+            <div class="btn" id="btn-jump">J<div id="jump-overlay" class="overlay-badge">3s</div></div>
+            <div class="btn" id="btn-gas">G</div>
+        </div>
+    </div>
+
+    <!-- Three.js Library -->
+    <script src="three.min.js"></script>
+    <script>
+        const MAP_SIZE = 1200;
+        const GOAL_WIDTH = 250;
+        const GOAL_DEPTH = 80;
+        const WINNING_SCORE = 10;
+
+        let scene, camera, renderer;
+        let bikes = [];
+        let player;
+        let staticBoxes = [];
+        let gameActive = true;
+        let minimapCtx;
+        let soccerBall;
+        let blueScore = 0;
+        let orangeScore = 0;
+
+        const GAME_STATE = {
+            SPEED_NORMAL: 1.5,
+            SPEED_FAST: 2.5,
+            SPEED_SLOW: 0.8,
+            SPEED_NOS: 3.8
+        };
+
+        function createBikeMesh(colorHex) {
+            const group = new THREE.Group();
+
+            const bodyGeo = new THREE.BoxGeometry(2.8, 1.4, 4.8);
+            const bodyMat = new THREE.MeshStandardMaterial({ 
+                color: colorHex, 
+                metalness: 0.6, 
+                roughness: 0.3 
+            });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 1.4;
+            body.castShadow = true;
+            group.add(body);
+
+            const glowGeo = new THREE.BoxGeometry(2.85, 0.25, 4.4);
+            const glowMat = new THREE.MeshBasicMaterial({ color: colorHex });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            glow.position.y = 1.5;
+            group.add(glow);
+
+            const wheelGeo = new THREE.CylinderGeometry(1.0, 1.0, 0.7, 16);
+            const wheelMat = new THREE.MeshStandardMaterial({ 
+                color: 0x555555, 
+                roughness: 0.4,
+                metalness: 0.2 
+            });
+
+            const createWheel = (x, z) => {
+                const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(x, 1.0, z);
+                return wheel;
+            };
+
+            group.add(createWheel(1.5, 1.8));
+            group.add(createWheel(-1.5, 1.8));
+            group.add(createWheel(1.5, -1.8));
+            group.add(createWheel(-1.5, -1.8));
+
+            return group;
+        }
+
+        class SoccerBall {
+            constructor() {
+                const radius = 12;
+                const geom = new THREE.SphereGeometry(radius, 16, 16);
+                const mat = new THREE.MeshBasicMaterial({ color: 0xff3300, wireframe: true });
+                this.mesh = new THREE.Mesh(geom, mat);
+                this.radius = radius;
+                scene.add(this.mesh);
+                this.reset();
+            }
+
+            reset() {
+                this.mesh.position.set(0, 150, 0);
+                this.velocity = new THREE.Vector3(0, -1, 0);
+            }
+
+            update() {
+                this.velocity.y -= 0.15;
+                this.mesh.position.add(this.velocity);
+
+                if (this.mesh.position.y <= this.radius) {
+                    this.mesh.position.y = this.radius;
+                    this.velocity.y = -this.velocity.y * 0.75;
+                    this.velocity.x *= 0.98;
+                    this.velocity.z *= 0.98;
+                }
+
+                const halfLimit = MAP_SIZE / 2 - 25;
+                
+                if (Math.abs(this.mesh.position.x) < GOAL_WIDTH / 2) {
+                    if (this.mesh.position.z < -halfLimit) {
+                        scoreGoal('orange');
+                        return;
+                    } else if (this.mesh.position.z > halfLimit) {
+                        scoreGoal('blue');
+                        return;
+                    }
+                }
+
+                if (Math.abs(this.mesh.position.x) > halfLimit) {
+                    this.mesh.position.x = Math.sign(this.mesh.position.x) * halfLimit;
+                    this.velocity.x = -this.velocity.x * 0.8;
+                }
+                if (Math.abs(this.mesh.position.z) > halfLimit && Math.abs(this.mesh.position.x) >= GOAL_WIDTH / 2) {
+                    this.mesh.position.z = Math.sign(this.mesh.position.z) * halfLimit;
+                    this.velocity.z = -this.velocity.z * 0.8;
+                }
+
+                this.mesh.rotation.x += 0.02;
+                this.mesh.rotation.y += 0.03;
+
+                const ballPos = this.mesh.position;
+                bikes.forEach(b => {
+                    if (!b.alive) return;
+                    const bikePos = b.mesh.position;
+                    const dist = ballPos.distanceTo(bikePos);
+                    
+                    if (dist < this.radius + 3.5) {
+                        const pushDir = new THREE.Vector3().subVectors(ballPos, bikePos).normalize();
+                        const impactForce = (b.speed || 1.5) * 3.5;
+                        this.velocity.x = pushDir.x * impactForce + (Math.sin(b.angle) * 2);
+                        this.velocity.z = pushDir.z * impactForce + (Math.cos(b.angle) * 2);
+                        this.velocity.y += 3.5;
+                    }
+                });
+            }
+        }
+
+        class Bike {
+            constructor(color, team, isAI = false, name = "Player") {
+                this.color = color;
+                this.team = team;
+                this.isAI = isAI;
+                this.name = name;
+                this.alive = true;
+                this.respawnTimer = 0;
+
+                this.mesh = createBikeMesh(color);
+                this.body = this.mesh.children[0];
+
+                this.isJumping = false;
+                this.jumpProgress = 0;
+                this.jumpCooldown = 0;
+                
+                this.nosActiveTimer = 0;
+                this.nosCooldownTimer = 0;
+
+                this.spawnPos = new THREE.Vector3();
+                this.spawnAngle = 0;
+            }
+
+            setSpawn(x, z, angle) {
+                this.spawnPos.set(x, 0.8, z);
+                this.spawnAngle = angle;
+                this.reset();
+            }
+
+            reset() {
+                this.alive = true;
+                this.respawnTimer = 0;
+                this.mesh.visible = true;
+                this.mesh.position.copy(this.spawnPos);
+                this.angle = this.spawnAngle;
+                this.speed = GAME_STATE.SPEED_NORMAL;
+                this.turning = 0;
+                this.mesh.rotation.y = this.angle;
+                this.isJumping = false;
+                this.jumpProgress = 0;
+                this.jumpCooldown = 0;
+                
+                this.nosActiveTimer = 0;
+                this.nosCooldownTimer = 0;
+
+                if (!this.isAI) {
+                    const nosBtn = document.getElementById('btn-nos');
+                    const nosOverlay = document.getElementById('nos-overlay');
+                    if (nosBtn) nosBtn.className = 'btn';
+                    if (nosOverlay) nosOverlay.style.display = 'none';
+                }
+            }
+
+            destroy() {
+                if (!this.alive) return;
+                this.alive = false;
+                this.mesh.visible = false;
+                this.speed = 0;
+                this.turning = 0;
+                this.respawnTimer = 120;
+            }
+
+            jump() {
+                if (!this.alive || this.jumpCooldown > 0 || this.isJumping) return false;
+                this.isJumping = true;
+                this.jumpProgress = 0;
+                this.jumpCooldown = 180;
+                return true;
+            }
+
+            triggerNOS() {
+                if (!this.alive || this.nosActiveTimer > 0 || this.nosCooldownTimer > 0) return false;
+                this.nosActiveTimer = 360;
+                return true;
+            }
+
+            update() {
+                if (!this.alive) {
+                    if (this.respawnTimer > 0) {
+                        this.respawnTimer--;
+                        if (this.respawnTimer <= 0) {
+                            this.reset();
+                        }
+                    }
+                    return;
+                }
+
+                if (this.jumpCooldown > 0) {
+                    this.jumpCooldown--;
+                    if (!this.isAI) {
+                        const overlay = document.getElementById('jump-overlay');
+                        const secs = (this.jumpCooldown / 60).toFixed(1);
+                        overlay.style.display = this.jumpCooldown > 0 ? 'flex' : 'none';
+                        overlay.innerText = secs + 's';
+                    }
+                }
+
+                if (this.nosActiveTimer > 0) {
+                    this.nosActiveTimer--;
+                    if (this.nosActiveTimer === 0) {
+                        this.nosCooldownTimer = 420;
+                    }
+                } else if (this.nosCooldownTimer > 0) {
+                    this.nosCooldownTimer--;
+                }
+
+                if (!this.isAI) {
+                    const nosBtn = document.getElementById('btn-nos');
+                    const nosOverlay = document.getElementById('nos-overlay');
+                    if (this.nosActiveTimer > 0) {
+                        nosBtn.className = 'btn active';
+                        nosOverlay.style.display = 'none';
+                    } else if (this.nosCooldownTimer > 0) {
+                        nosBtn.className = 'btn cooldown';
+                        nosOverlay.style.display = 'flex';
+                        nosOverlay.innerText = (this.nosCooldownTimer / 60).toFixed(1) + 's';
+                    } else {
+                        nosBtn.className = 'btn';
+                        nosOverlay.style.display = 'none';
+                    }
+                }
+
+                if (this.isJumping) {
+                    // Slower progress = stays in air longer (previously 0.04)
+                    this.jumpProgress += 0.022; 
+                    if (this.jumpProgress >= 1) {
+                        this.isJumping = false;
+                        this.mesh.position.y = 0.8;
+                    } else {
+                        // Higher vertical jump peak (previously 14 units high, now 22 units)
+                        this.mesh.position.y = 0.8 + Math.sin(this.jumpProgress * Math.PI) * 22;
+                    }
+                }
+
+                this.angle += this.turning * 0.038;
+                this.mesh.rotation.y = this.angle;
+
+                let currentSpeed = this.speed;
+                if (this.nosActiveTimer > 0) currentSpeed = GAME_STATE.SPEED_NOS;
+
+                const dx = Math.sin(this.angle) * currentSpeed;
+                const dz = Math.cos(this.angle) * currentSpeed;
+                this.mesh.position.x += dx;
+                this.mesh.position.z += dz;
+            }
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x02021a, 0.0025);
+
+            camera = new THREE.PerspectiveCamera(95, window.innerWidth / window.innerHeight, 0.1, 2000);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            dirLight.position.set(200, 400, 200);
+            scene.add(dirLight);
+
+            minimapCtx = document.getElementById('minimap').getContext('2d');
+
+            createArena();
+
+            player = new Bike(0x00ffff, 'blue', false, "Player");
+            const aiBlue = new Bike(0x0088ff, 'blue', true, "Blue AI");
+            const aiOrange1 = new Bike(0xff5500, 'orange', true, "Orange 1");
+            const aiOrange2 = new Bike(0xffaa00, 'orange', true, "Orange 2");
+
+            bikes = [player, aiBlue, aiOrange1, aiOrange2];
+            bikes.forEach(b => scene.add(b.mesh));
+
+            soccerBall = new SoccerBall();
+
+            resetPositions();
+            setupControls();
+            window.addEventListener('resize', onWindowResize);
+
+            animate();
+        }
+
+        function createArena() {
+            const gridHelper = new THREE.GridHelper(MAP_SIZE, 80, 0x00ffff, 0x222266);
+            gridHelper.position.y = 0;
+            scene.add(gridHelper);
+
+            const wallMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
+            const blueGoalMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
+            const orangeGoalMat = new THREE.MeshBasicMaterial({ color: 0xff5500, wireframe: true });
+            
+            const half = MAP_SIZE / 2;
+            const thickness = 2;
+            const height = 20;
+
+            const createBoundary = (x, z, w, d) => {
+                const geom = new THREE.BoxGeometry(w, height, d);
+                const mesh = new THREE.Mesh(geom, wallMat);
+                mesh.position.set(x, height / 2, z);
+                mesh.updateMatrixWorld(true);
+                scene.add(mesh);
+                
+                mesh.geometry.computeBoundingBox();
+                const box = new THREE.Box3();
+                box.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld);
+                staticBoxes.push(box);
+            };
+
+            createBoundary(-half, 0, thickness, MAP_SIZE);
+            createBoundary(half, 0, thickness, MAP_SIZE);
+
+            const sideWallWidth = (MAP_SIZE - GOAL_WIDTH) / 2;
+            const leftCenterX = -half + (sideWallWidth / 2);
+            const rightCenterX = half - (sideWallWidth / 2);
+
+            createBoundary(leftCenterX, -half, sideWallWidth, thickness);
+            createBoundary(rightCenterX, -half, sideWallWidth, thickness);
+
+            createBoundary(leftCenterX, half, sideWallWidth, thickness);
+            createBoundary(rightCenterX, half, sideWallWidth, thickness);
+
+            const createGoalMesh = (z, colorMat) => {
+                const goalGroup = new THREE.Group();
+                const backGeom = new THREE.BoxGeometry(GOAL_WIDTH, height, thickness);
+                const back = new THREE.Mesh(backGeom, colorMat);
+                back.position.set(0, height / 2, z > 0 ? z + GOAL_DEPTH : z - GOAL_DEPTH);
+                
+                const sideGeom = new THREE.BoxGeometry(thickness, height, GOAL_DEPTH);
+                const leftSide = new THREE.Mesh(sideGeom, colorMat);
+                leftSide.position.set(-GOAL_WIDTH / 2, height / 2, z > 0 ? z + GOAL_DEPTH / 2 : z - GOAL_DEPTH / 2);
+                
+                const rightSide = new THREE.Mesh(sideGeom, colorMat);
+                rightSide.position.set(GOAL_WIDTH / 2, height / 2, z > 0 ? z + GOAL_DEPTH / 2 : z - GOAL_DEPTH / 2);
+
+                goalGroup.add(back, leftSide, rightSide);
+                scene.add(goalGroup);
+            };
+
+            createGoalMesh(-half, blueGoalMat);
+            createGoalMesh(half, orangeGoalMat);
+        }
+
+        function resetPositions() {
+            player.setSpawn(-100, -450, 0);
+            bikes[1].setSpawn(100, -450, 0);
+            bikes[2].setSpawn(-100, 450, Math.PI);
+            bikes[3].setSpawn(100, 450, Math.PI);
+
+            if (soccerBall) soccerBall.reset();
+        }
+
+        function scoreGoal(scoringTeam) {
+            if (scoringTeam === 'blue') blueScore++;
+            else if (scoringTeam === 'orange') orangeScore++;
+
+            document.getElementById('blue-pts').innerText = blueScore;
+            document.getElementById('orange-pts').innerText = orangeScore;
+
+            if (blueScore >= WINNING_SCORE || orangeScore >= WINNING_SCORE) {
+                gameActive = false;
+                const msg = blueScore >= WINNING_SCORE ? "BLUE WINS!" : "ORANGE WINS!";
+                document.getElementById('gameover-text').innerText = msg;
+                document.getElementById('gameover').style.display = 'flex';
+            } else {
+                resetPositions();
+            }
+        }
+
+        function setupControls() {
+            window.addEventListener('keydown', (e) => {
+                if (!gameActive) return;
+                if (e.key === 'ArrowLeft' || e.key === 'a') player.turning = 1;
+                if (e.key === 'ArrowRight' || e.key === 'd') player.turning = -1;
+                if (e.key === 'ArrowUp' || e.key === 'w') player.speed = GAME_STATE.SPEED_FAST;
+                if (e.key === 'ArrowDown' || e.key === 's') player.speed = GAME_STATE.SPEED_SLOW;
+                if (e.key === ' ' || e.key === 'j') player.jump();
+                if (e.key === 'Shift' || e.key === 'n' || e.key === 'N') player.triggerNOS();
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'a') player.turning = 0;
+                if (e.key === 'ArrowRight' || e.key === 'd') player.turning = 0;
+                if ((e.key === 'ArrowUp' || e.key === 'w') || (e.key === 'ArrowDown' || e.key === 's')) {
+                    player.speed = GAME_STATE.SPEED_NORMAL;
+                }
+            });
+
+            const bindTouch = (id, onDown, onUp) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.addEventListener('touchstart', (e) => { e.preventDefault(); if(player.alive) onDown(); });
+                el.addEventListener('touchend', (e) => { e.preventDefault(); if(player.alive) onUp(); });
+                el.addEventListener('mousedown', () => { if(player.alive) onDown(); });
+                el.addEventListener('mouseup', () => { if(player.alive) onUp(); });
+            };
+
+            bindTouch('btn-left', () => player.turning = 1, () => player.turning = 0);
+            bindTouch('btn-right', () => player.turning = -1, () => player.turning = 0);
+            bindTouch('btn-gas', () => player.speed = GAME_STATE.SPEED_FAST, () => player.speed = GAME_STATE.SPEED_NORMAL);
+            bindTouch('btn-break', () => player.speed = GAME_STATE.SPEED_SLOW, () => player.speed = GAME_STATE.SPEED_NORMAL);
+            
+            const jumpBtn = document.getElementById('btn-jump');
+            jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if(player.alive) player.jump(); });
+            jumpBtn.addEventListener('mousedown', () => { if(player.alive) player.jump(); });
+
+            const nosBtn = document.getElementById('btn-nos');
+            nosBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if(player.alive) player.triggerNOS(); });
+            nosBtn.addEventListener('mousedown', () => { if(player.alive) player.triggerNOS(); });
+        }
+
+        function updateAI(ai) {
+            if (!ai.alive) return;
+            ai.speed = GAME_STATE.SPEED_FAST;
+
+            const targetGoalZ = ai.team === 'blue' ? MAP_SIZE / 2 : -MAP_SIZE / 2;
+            const ballPos = soccerBall.mesh.position;
+            const strikeOffsetZ = ai.team === 'blue' ? -25 : 25;
+            const targetPos = new THREE.Vector3(ballPos.x, ballPos.y, ballPos.z + strikeOffsetZ);
+
+            const targetAngle = Math.atan2(targetPos.x - ai.mesh.position.x, targetPos.z - ai.mesh.position.z);
+            let angleDiff = targetAngle - ai.angle;
+
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+            if (Math.abs(angleDiff) > 0.08) {
+                ai.turning = angleDiff > 0 ? 1 : -1;
+            } else {
+                ai.turning = 0;
+            }
+
+            if (Math.abs(angleDiff) < 0.2 && ai.mesh.position.distanceTo(ballPos) > 200 && ai.nosActiveTimer === 0 && ai.nosCooldownTimer === 0) {
+                ai.triggerNOS();
+            }
+        }
+
+        function checkCollisions() {
+            for (let i = 0; i < bikes.length; i++) {
+                let b1 = bikes[i];
+                if (!b1.alive) continue;
+
+                b1.body.geometry.computeBoundingBox();
+                const b1Box = new THREE.Box3();
+                b1Box.copy(b1.body.geometry.boundingBox).applyMatrix4(b1.body.matrixWorld);
+
+                for (let box of staticBoxes) {
+                    if (b1Box.intersectsBox(box)) {
+                        b1.destroy();
+                        break;
+                    }
+                }
+
+                if (!b1.alive) continue;
+
+                for (let j = i + 1; j < bikes.length; j++) {
+                    let b2 = bikes[j];
+                    if (!b2.alive) continue;
+
+                    b2.body.geometry.computeBoundingBox();
+                    const b2Box = new THREE.Box3();
+                    b2Box.copy(b2.body.geometry.boundingBox).applyMatrix4(b2.body.matrixWorld);
+
+                    if (!b1.isJumping && !b2.isJumping && b1Box.intersectsBox(b2Box)) {
+                        b1.destroy();
+                        b2.destroy();
+                        break;
+                    }
+                }
+            }
+        }
+
+        function drawMinimap() {
+            if (!minimapCtx) return;
+            const w = 150;
+            const h = 150;
+            minimapCtx.clearRect(0, 0, w, h);
+
+            const scale = w / MAP_SIZE;
+            const offsetX = MAP_SIZE / 2;
+            const offsetZ = MAP_SIZE / 2;
+
+            const toCanvasCoords = (x, z) => ({
+                x: (x + offsetX) * scale,
+                y: (z + offsetZ) * scale
+            });
+
+            if (soccerBall) {
+                const bPos = toCanvasCoords(soccerBall.mesh.position.x, soccerBall.mesh.position.z);
+                minimapCtx.fillStyle = '#ff3300';
+                minimapCtx.beginPath();
+                minimapCtx.arc(bPos.x, bPos.y, 4, 0, Math.PI * 2);
+                minimapCtx.fill();
+            }
+
+            bikes.forEach(b => {
+                if (!b.alive) return;
+                const pos = toCanvasCoords(b.mesh.position.x, b.mesh.position.z);
+                minimapCtx.fillStyle = '#' + b.color.toString(16).padStart(6, '0');
+                minimapCtx.beginPath();
+                minimapCtx.arc(pos.x, pos.y, 3.5, 0, Math.PI * 2);
+                minimapCtx.fill();
+            });
+        }
+
+        window.restartGame = function() {
+            blueScore = 0;
+            orangeScore = 0;
+            document.getElementById('blue-pts').innerText = '0';
+            document.getElementById('orange-pts').innerText = '0';
+            gameActive = true;
+            document.getElementById('gameover').style.display = 'none';
+            resetPositions();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (gameActive) {
+                player.update();
+                bikes.forEach(b => {
+                    if (b.isAI) {
+                        updateAI(b);
+                        b.update();
+                    }
+                });
+                
+                if (soccerBall) soccerBall.update();
+                checkCollisions();
+
+                if (player.alive) {
+                    const camOffset = new THREE.Vector3(
+                        -Math.sin(player.angle) * 20,
+                        10 + (player.isJumping ? Math.sin(player.jumpProgress * Math.PI) * 4 : 0),
+                        -Math.cos(player.angle) * 20
+                    );
+                    camera.position.copy(player.mesh.position).add(camOffset);
+                    
+                    const lookTarget = player.mesh.position.clone().add(new THREE.Vector3(
+                        Math.sin(player.angle) * 10,
+                        2.0,
+                        Math.cos(player.angle) * 10
+                    ));
+                    camera.lookAt(lookTarget);
+                }
+            }
+
+            renderer.render(scene, camera);
+            drawMinimap();
+        }
+
+        init();
+    </script>
+</body>
+</html>
